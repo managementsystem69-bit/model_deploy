@@ -1,72 +1,72 @@
 from fastapi import FastAPI, HTTPException
 import os
+import sys
 import gdown
 import torch
 from typing import List
 
-app = FastAPI(title="Railway PyTorch Model API")
+app = FastAPI(title="Best Model Complete API")
 
 # =====================================
 # CONFIG
 # =====================================
 FOLDER_ID = "1yYcM8kryj_T_BQZBdpQEJJBIae0A1NcQ"
-DOWNLOAD_DIR = "./model_files"
-device = torch.device("cpu")
+BASE_DIR = "./model_files"
+MODEL_DIR = "best_model_complete"  # This IS the model
 
-model = None  # Global model reference
+device = torch.device("cpu")
+model = None
 
 
 # =====================================
 # DOWNLOAD GOOGLE DRIVE FOLDER
 # =====================================
-def download_folder_from_drive():
-    if not os.path.exists(DOWNLOAD_DIR):
-        os.makedirs(DOWNLOAD_DIR)
+def download_drive_folder():
+    if not os.path.exists(BASE_DIR):
+        os.makedirs(BASE_DIR)
 
-    # Only download if directory is empty
-    if not any(os.scandir(DOWNLOAD_DIR)):
-        print("Downloading full model folder from Google Drive...")
+    # Download only if empty
+    if not any(os.scandir(BASE_DIR)):
+        print("Downloading best_model_complete from Google Drive...")
         gdown.download_folder(
             id=FOLDER_ID,
-            output=DOWNLOAD_DIR,
+            output=BASE_DIR,
             quiet=False,
             use_cookies=False
         )
-        print("Download completed!")
+        print("Download complete.")
     else:
-        print("Model folder already exists. Skipping download.")
+        print("Files already exist. Skipping download.")
 
 
 # =====================================
-# FIND MODEL FILE AUTOMATICALLY
-# =====================================
-def find_model_file():
-    for root, dirs, files in os.walk(DOWNLOAD_DIR):
-        for file in files:
-            if file.endswith(".pth"):
-                return os.path.join(root, file)
-    return None
-
-
-# =====================================
-# LOAD MODEL AT STARTUP
+# LOAD MODEL
 # =====================================
 @app.on_event("startup")
 def load_model():
     global model
 
-    download_folder_from_drive()
+    download_drive_folder()
 
-    model_path = find_model_file()
+    model_path = os.path.join(BASE_DIR, MODEL_DIR)
 
-    if model_path is None:
-        raise RuntimeError("No .pth model file found inside Drive folder!")
+    if not os.path.exists(model_path):
+        raise RuntimeError(
+            f"Model directory not found at: {model_path}"
+        )
 
-    print(f"Loading model from: {model_path}")
+    print(f"Loading model from directory: {model_path}")
 
-    model = torch.load(model_path, map_location=device)
+    # Try normal torch.load first
+    try:
+        model = torch.load(model_path, map_location=device)
+        print("Loaded using torch.load()")
+    except Exception:
+        # If it was saved as TorchScript
+        model = torch.jit.load(model_path, map_location=device)
+        print("Loaded using torch.jit.load()")
+
     model.eval()
-
     print("Model loaded successfully!")
 
 
@@ -75,7 +75,9 @@ def load_model():
 # =====================================
 @app.get("/")
 def home():
-    return {"status": "Railway PyTorch Model API Running Successfully"}
+    return {
+        "status": "Best Model Complete API Running Successfully"
+    }
 
 
 @app.post("/predict")
@@ -87,7 +89,10 @@ def predict(features: List[float]):
         raise HTTPException(status_code=400, detail="Features list is empty")
 
     try:
-        input_tensor = torch.tensor([features], dtype=torch.float32).to(device)
+        input_tensor = torch.tensor(
+            [features],
+            dtype=torch.float32
+        ).to(device)
 
         with torch.no_grad():
             output = model(input_tensor)
@@ -95,4 +100,7 @@ def predict(features: List[float]):
         return {"prediction": output.tolist()}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Inference error: {str(e)}"
+        )
