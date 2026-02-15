@@ -1,6 +1,5 @@
-fastapi
-uvicorn
-gdown
-numpy
-torch==2.2.2+cpu
---extra-index-url https://download.pytorch.org/whl/cpu
+fastapi==0.110.0
+uvicorn==0.29.0
+torch==2.2.2
+gdown==5.1.0
+numpy==1.26.4
